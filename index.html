@@ -1,0 +1,1047 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>2026 Holiday Time Off (HTO) Tracker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <style>
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0f172a; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #475569; }
+    input[type="date"]::-webkit-calendar-picker-indicator {
+      filter: invert(1);
+      cursor: pointer;
+      opacity: 0.8;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans antialiased text-sm">
+
+  <!-- ================= TOP NAVIGATION BAR ================= -->
+  <header class="sticky top-0 z-30 bg-slate-900/95 backdrop-blur border-b border-slate-800 shadow-md px-4 py-2.5">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
+      
+      <!-- Brand -->
+      <div class="flex items-center gap-3">
+        <div class="bg-emerald-500/10 text-emerald-400 p-2 rounded-lg border border-emerald-500/20">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+          </svg>
+        </div>
+        <div>
+          <h1 class="text-base font-bold tracking-tight text-white">2026 HTO Tracker</h1>
+          <p class="text-[11px] text-slate-400">Automated Holiday Time Off & Audit Balance System</p>
+        </div>
+      </div>
+
+      <!-- Action Toolbar -->
+      <div class="flex items-center gap-2 flex-wrap">
+        <!-- Mode Switcher Button -->
+        <button id="btnModeToggle" onclick="handleModeToggle()" class="px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700">
+          <svg id="iconModeLock" class="w-3.5 h-3.5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+          </svg>
+          <span id="labelMode">View Only (Click to Edit)</span>
+        </button>
+
+        <!-- Guide Button -->
+        <button onclick="openGuideModal()" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 flex items-center gap-1.5 transition">
+          <svg class="w-3.5 h-3.5 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+          Guide
+        </button>
+
+        <!-- Export CSV (Available to Viewers & Editors) -->
+        <button onclick="exportToCSV()" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 flex items-center gap-1.5 transition" title="Export CSV (Available to Viewers & Editors)">
+          <svg class="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+          </svg>
+          Export CSV
+        </button>
+
+        <!-- Editor Only Controls -->
+        <div id="editorControls" class="hidden flex items-center gap-2">
+          <!-- Upload File -->
+          <button onclick="openUploadModal()" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white flex items-center gap-1.5 shadow transition">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+            </svg>
+            Upload File
+          </button>
+
+          <!-- Manage Members -->
+          <button onclick="openManageMembersModal()" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white flex items-center gap-1.5 shadow transition">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
+            </svg>
+            Manage Members
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ================= MAIN CONTAINER ================= -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-4 flex flex-col gap-4">
+
+    <!-- Top Summary Cards -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-3 flex items-center justify-between">
+        <div>
+          <span class="text-xs text-slate-400 font-medium uppercase tracking-wider">Users</span>
+          <p id="metricTotalUsers" class="text-2xl font-bold text-white mt-0.5">0</p>
+        </div>
+        <div class="bg-blue-500/10 text-blue-400 p-2.5 rounded-lg border border-blue-500/20">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+          </svg>
+        </div>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-3 flex items-center justify-between">
+        <div>
+          <span class="text-xs text-slate-400 font-medium uppercase tracking-wider">DVO Alert Deductions</span>
+          <p id="metricAlertStrikes" class="text-2xl font-bold text-rose-400 mt-0.5">0</p>
+        </div>
+        <div class="bg-rose-500/10 text-rose-400 p-2.5 rounded-lg border border-rose-500/20">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+          </svg>
+        </div>
+      </div>
+    </div>
+
+    <!-- Filters & Search Toolbar -->
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-3 flex flex-wrap items-center gap-3">
+      <div class="relative flex-1 min-w-[220px]">
+        <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+          </svg>
+        </span>
+        <input type="text" id="searchInput" oninput="renderApp()" placeholder="Search employee name or team..." class="w-full pl-9 pr-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-400 focus:outline-none focus:border-blue-500" />
+      </div>
+
+      <div class="w-auto min-w-[180px]">
+        <select id="departmentFilter" onchange="renderApp()" class="w-full px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-blue-500">
+          <option value="ALL">All Departments / Groups</option>
+          <option value="T1MSG">T1MSG</option>
+          <option value="T1VIN">T1VIN</option>
+          <option value="SMM">SMM</option>
+          <option value="T2">T2</option>
+          <option value="Back Office">Back Office</option>
+          <option value="Managers & Leads">Managers & Leads</option>
+          <option value="QA">QA</option>
+          <option value="Training Operations">Training Operations</option>
+          <option value="Communications">Communications</option>
+          <option value="Tap">Tap</option>
+        </select>
+      </div>
+
+      <div class="w-auto min-w-[160px]">
+        <select id="statusFilter" onchange="renderApp()" class="w-full px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-blue-500">
+          <option value="ALL">All Records</option>
+          <option value="HAS_ALERT">DVO with Alerts (≥1)</option>
+          <option value="ZERO_BALANCE">Zero Balance Left</option>
+          <option value="HAS_BALANCE">Has Available Balance</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Multi-select Bulk Action Bar -->
+    <div id="bulkActionBar" class="hidden bg-slate-800 border border-slate-700 rounded-lg p-2.5 flex items-center justify-between text-xs">
+      <span id="bulkSelectedCount" class="font-semibold text-slate-200">0 selected</span>
+      <div class="flex items-center gap-2">
+        <button onclick="handleBatchDelete()" class="px-2.5 py-1 bg-rose-600 hover:bg-rose-500 text-white rounded font-medium transition">
+          Delete Selected
+        </button>
+        <button onclick="clearSelection()" class="px-2.5 py-1 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded transition">
+          Deselect All
+        </button>
+      </div>
+    </div>
+
+    <!-- ================= TABLE VIEWPORT (FROZEN HEADER) ================= -->
+    <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden flex-1 flex flex-col min-h-[400px]">
+      <div class="overflow-y-auto max-h-[calc(100vh-320px)] relative">
+        <table class="w-full text-left text-xs border-collapse">
+          <thead class="sticky top-0 z-20 bg-slate-800 text-slate-300 border-b border-slate-700 select-none shadow-sm">
+            <tr>
+              <th id="thSelectAll" class="w-8 px-2 py-2.5 text-center hidden">
+                <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll(this.checked)" class="rounded bg-slate-700 border-slate-600 text-blue-500" />
+              </th>
+              <th class="w-48 px-3 py-2.5 font-semibold tracking-wider">NAME</th>
+              <th class="w-32 px-2 py-2.5 font-semibold tracking-wider">TEAM / GROUP</th>
+              <th class="w-12 px-2 py-2.5 font-semibold text-center tracking-wider">TOTAL</th>
+              <th class="w-12 px-2 py-2.5 font-semibold text-center tracking-wider">USED</th>
+              <th class="w-16 px-2 py-2.5 font-semibold text-center tracking-wider">REMAINING</th>
+              <th class="px-3 py-2.5 font-semibold tracking-wider">SCHEDULED DATES (HTO)</th>
+              <th class="w-32 px-2 py-2.5 font-semibold text-center tracking-wider">ALERT: NO ANSWER</th>
+              <th id="thActions" class="w-12 px-2 py-2.5 font-semibold text-center tracking-wider hidden">ACTION</th>
+            </tr>
+          </thead>
+          <tbody id="rosterTableBody" class="divide-y divide-slate-800/80">
+            <!-- Dynamically Rendered -->
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Blank / Empty State Container -->
+      <div id="emptyState" class="hidden flex-1 flex flex-col items-center justify-center p-8 text-center">
+        <div class="w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 mb-2 border border-slate-700">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
+          </svg>
+        </div>
+        <h3 class="text-sm font-semibold text-white">No Personnel Records</h3>
+        <p class="text-xs text-slate-400 mt-1 max-w-sm">No members match your criteria or the template is currently blank. Unlock Edit Mode to add personnel or upload rosters.</p>
+      </div>
+    </div>
+  </main>
+
+  <!-- ================= MODALS ================= -->
+
+  <!-- 1. Password Unlock Modal -->
+  <div id="modalPassword" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-xl max-w-sm w-full p-5 shadow-2xl">
+      <h3 class="text-sm font-bold text-white flex items-center gap-2">
+        <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+        </svg>
+        Password Required
+      </h3>
+      <p class="text-xs text-slate-400 mt-1">Please enter the password to unlock Edit Mode.</p>
+      <input type="password" id="inputPassword" placeholder="Enter password" class="w-full mt-3 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-blue-500" />
+      <div id="pwdError" class="hidden text-rose-400 text-[11px] mt-1 font-medium">Incorrect password. Please try again.</div>
+      <div class="flex justify-end gap-2 mt-4">
+        <button onclick="closePasswordModal()" class="px-3 py-1.5 rounded-lg text-xs bg-slate-800 text-slate-300 hover:bg-slate-700">Cancel</button>
+        <button onclick="verifyPassword()" class="px-3 py-1.5 rounded-lg text-xs bg-blue-600 text-white font-medium hover:bg-blue-500">Unlock</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. Interactive Date & GMSCC Name Modal -->
+  <div id="modalAddDate" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-xl max-w-md w-full p-5 shadow-2xl">
+      <div class="flex justify-between items-center pb-2 border-b border-slate-800">
+        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+          <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+          </svg>
+          Schedule HTO Date
+        </h3>
+        <button onclick="closeAddDateModal()" class="text-slate-400 hover:text-white">✕</button>
+      </div>
+      
+      <p id="labelDateTargetUser" class="text-xs text-blue-400 font-semibold mt-2">Scheduling for Employee</p>
+
+      <div class="mt-4 space-y-4">
+        <div>
+          <label class="block text-[11px] text-slate-300 uppercase font-semibold mb-1">Select Date (MM/DD/YYYY) *</label>
+          <input type="date" id="inputModalDate" class="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500 cursor-pointer" />
+          <div class="flex items-center gap-2 mt-2">
+            <span class="text-[10px] text-slate-400">Quick Picks:</span>
+            <button type="button" onclick="setPresetDate(0)" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 border border-slate-700">Today</button>
+            <button type="button" onclick="setPresetDate(1)" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 border border-slate-700">Tomorrow</button>
+            <button type="button" onclick="setPresetDate(7)" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 border border-slate-700">+1 Week</button>
+            <button type="button" onclick="setPresetDate(30)" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 border border-slate-700">+1 Month</button>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-[11px] text-slate-300 uppercase font-semibold mb-1">GMSCC Name *</label>
+          <input type="text" id="inputModalGmscc" placeholder="e.g. Jane Doe" class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-blue-500" />
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-2 mt-5 pt-3 border-t border-slate-800">
+        <button onclick="closeAddDateModal()" class="px-3 py-1.5 rounded-lg text-xs bg-slate-800 text-slate-300 hover:bg-slate-700">Cancel</button>
+        <button onclick="confirmModalScheduleDate()" class="px-4 py-1.5 rounded-lg text-xs bg-blue-600 text-white font-medium hover:bg-blue-500 shadow">Save Date</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. Manage Members Modal -->
+  <div id="modalManageMembers" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-xl max-w-lg w-full p-5 shadow-2xl max-h-[90vh] flex flex-col">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+          <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+          </svg>
+          Manage Members Hub
+        </h3>
+        <button onclick="closeManageMembersModal()" class="text-slate-400 hover:text-white">✕</button>
+      </div>
+
+      <div class="overflow-y-auto flex-1 py-4 space-y-4">
+        <div class="flex border-b border-slate-800">
+          <button id="tabSingleAdd" onclick="switchAddTab('single')" class="px-3 py-1.5 text-xs font-semibold text-blue-400 border-b-2 border-blue-400">Single Member</button>
+          <button id="tabBulkAdd" onclick="switchAddTab('bulk')" class="px-3 py-1.5 text-xs font-semibold text-slate-400 hover:text-slate-200">Bulk Paste Names</button>
+        </div>
+
+        <div id="paneSingleAdd" class="space-y-3">
+          <div>
+            <label class="block text-[11px] text-slate-400 font-semibold mb-1">Employee Full Name *</label>
+            <input type="text" id="inputSingleName" placeholder="Enter full name" class="w-full px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-xs text-white" />
+          </div>
+        </div>
+
+        <div id="paneBulkAdd" class="hidden space-y-3">
+          <div>
+            <label class="block text-[11px] text-slate-400 font-semibold mb-1">Paste Names (One name per line)</label>
+            <textarea id="inputBulkNames" rows="5" placeholder="John Doe&#10;Jane Smith&#10;Maria Santos" class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-xs text-white"></textarea>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3 pt-2 border-t border-slate-800">
+          <div>
+            <label class="block text-[11px] text-slate-400 font-semibold mb-1">Department / Group *</label>
+            <select id="selectMemberTeam" class="w-full px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-xs text-white">
+              <option value="T1MSG">T1MSG</option>
+              <option value="T1VIN">T1VIN</option>
+              <option value="SMM">SMM</option>
+              <option value="T2">T2</option>
+              <option value="Back Office">Back Office</option>
+              <option value="Managers & Leads">Managers & Leads</option>
+              <option value="QA">QA</option>
+              <option value="Training Operations">Training Operations</option>
+              <option value="Communications">Communications</option>
+              <option value="Tap">Tap</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[11px] text-slate-400 font-semibold mb-1">Total Leave Credits</label>
+            <input type="number" id="inputMemberCredits" value="5" min="1" max="20" class="w-full px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-xs text-white" />
+          </div>
+        </div>
+      </div>
+
+      <div class="pt-3 border-t border-slate-800 flex justify-end gap-2">
+        <button onclick="closeManageMembersModal()" class="px-3 py-1.5 rounded-lg text-xs bg-slate-800 text-slate-300 hover:bg-slate-700">Cancel</button>
+        <button onclick="submitAddMembers()" class="px-3 py-1.5 rounded-lg text-xs bg-emerald-600 text-white font-medium hover:bg-emerald-500">Add Member(s)</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. Excel / CSV Upload Modal -->
+  <div id="modalUpload" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-xl max-w-md w-full p-5 shadow-2xl">
+      <h3 class="text-sm font-bold text-white flex items-center gap-2">
+        <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+        </svg>
+        Upload Excel / CSV Roster
+      </h3>
+      <p class="text-xs text-slate-400 mt-1">Expected 3 Columns: <span class="text-white font-semibold">Name</span>, <span class="text-white font-semibold">Team Name / Group</span>, <span class="text-white font-semibold">Remaining</span></p>
+
+      <div class="mt-4 flex gap-4 text-xs font-semibold">
+        <label class="flex items-center gap-1.5 text-slate-300">
+          <input type="radio" name="uploadMode" value="add" checked class="text-blue-500"> Add / Update
+        </label>
+        <label class="flex items-center gap-1.5 text-slate-300">
+          <input type="radio" name="uploadMode" value="remove" class="text-rose-500"> Bulk Remove
+        </label>
+      </div>
+
+      <input type="file" id="fileUploadInput" accept=".xlsx, .xls, .csv" class="mt-4 w-full text-xs text-slate-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-slate-800 file:text-blue-400 hover:file:bg-slate-700 cursor-pointer" />
+
+      <div class="flex justify-end gap-2 mt-5">
+        <button onclick="closeUploadModal()" class="px-3 py-1.5 rounded-lg text-xs bg-slate-800 text-slate-300 hover:bg-slate-700">Cancel</button>
+        <button onclick="processUploadedFile()" class="px-3 py-1.5 rounded-lg text-xs bg-blue-600 text-white font-medium hover:bg-blue-500">Process File</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. How-To Guide Modal -->
+  <div id="modalGuide" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-xl max-w-xl w-full p-5 shadow-2xl flex flex-col max-h-[85vh]">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+          <svg class="w-4 h-4 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+          </svg>
+          HTO Tracker Documentation & Guide
+        </h3>
+        <button onclick="closeGuideModal()" class="text-slate-400 hover:text-white">✕</button>
+      </div>
+
+      <div class="flex border-b border-slate-800 pt-2">
+        <button id="guideTabViewer" onclick="switchGuideTab('viewer')" class="px-3 py-1.5 text-xs font-semibold text-blue-400 border-b-2 border-blue-400">Viewer Guide</button>
+        <button id="guideTabEditor" onclick="switchGuideTab('editor')" class="px-3 py-1.5 text-xs font-semibold text-slate-400 hover:text-slate-200">Editor Guide</button>
+      </div>
+
+      <div class="overflow-y-auto flex-1 py-4 text-xs space-y-3 text-slate-300">
+        <div id="guideContentViewer" class="space-y-3">
+          <p><strong class="text-white">Protected View-Only Mode:</strong> By default, this tracker prevents accidental edits, additions, or date alterations.</p>
+          <p><strong class="text-white">Search & Filter:</strong> Use the search bar to locate any employee by name. Use the flat department dropdown to filter groups (T1MSG, T1VIN, SMM, T2, Back Office, QA, etc.).</p>
+          <p><strong class="text-white">Balance Formula:</strong> Remaining credits are calculated dynamically:
+            <span class="block font-mono bg-slate-950 p-2 rounded mt-1 text-slate-200">Remaining = Total Credits - (Scheduled Dates + DVO Alert Strikes)</span>
+          </p>
+          <p><strong class="text-white">Export:</strong> Anyone can click <span class="text-emerald-400 font-semibold">Export CSV</span> at any time to download the current filtered view.</p>
+        </div>
+
+        <div id="guideContentEditor" class="hidden space-y-3">
+          <p><strong class="text-white">Unlocking Edit Mode:</strong> Click the "View Only" button and authenticate with the password.</p>
+          <p><strong class="text-white">Scheduling Dates:</strong> Click <span class="text-blue-400 font-semibold">+ Add Date</span> on any member row, pick or type the full date, enter your <strong class="text-blue-400">GMSCC Name</strong>, and click <strong>Save Date</strong>.</p>
+          <p><strong class="text-white">DVO Alert Strikes:</strong> Use the + / - stepper under "Alert: No Answer" to log operational strikes. This is active exclusively for DVO groups (T1MSG, T1VIN, SMM, T2).</p>
+          <p><strong class="text-white">Duplicate Protection:</strong> The tracker prevents adding duplicate names during manual entry or roster uploads.</p>
+          <p><strong class="text-white">Data Isolation:</strong> Adding or removing personnel will never recalculate or disrupt other employees' scheduled dates or balances.</p>
+        </div>
+      </div>
+
+      <div class="pt-3 border-t border-slate-800 flex justify-end">
+        <button onclick="closeGuideModal()" class="px-3 py-1.5 rounded-lg text-xs bg-slate-800 text-slate-300 hover:bg-slate-700">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toastContainer" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2"></div>
+
+  <!-- ================= JAVASCRIPT LOGIC ================= -->
+  <script>
+    const AUTH_PASSWORD = "GMSCC";
+    const STORAGE_KEY = "hto_tracker_2026_local_v1";
+    let isEditMode = false;
+    let selectedIds = new Set();
+    let currentTargetEmpId = null;
+
+    window.employees = [];
+
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      const colors = {
+        success: 'bg-emerald-600 text-white',
+        error: 'bg-rose-600 text-white',
+        warning: 'bg-amber-600 text-white',
+        info: 'bg-slate-800 text-slate-200 border border-slate-700'
+      };
+      toast.className = `px-3.5 py-2 rounded-lg text-xs font-medium shadow-lg transition transform duration-200 flex items-center gap-2 ${colors[type] || colors.info}`;
+      toast.textContent = message;
+      container.appendChild(toast);
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        setTimeout(() => toast.remove(), 300);
+      }, 3500);
+    }
+
+    function isDvoGroup(team) {
+      if (!team) return false;
+      const t = team.trim().toUpperCase();
+      return ['T1MSG', 'T1VIN', 'SMM', 'T2'].includes(t);
+    }
+
+    function normalizeTeam(raw) {
+      if (!raw) return 'Back Office';
+      const clean = raw.trim().toUpperCase().replace(/[\s\-_]/g, '');
+      if (clean === 'T1MSG') return 'T1MSG';
+      if (clean === 'T1VIN') return 'T1VIN';
+      if (clean === 'SMM') return 'SMM';
+      if (clean === 'T2') return 'T2';
+      if (clean.includes('MANAG') || clean.includes('LEAD') || clean === 'TL') return 'Managers & Leads';
+      if (clean.includes('BACK') || clean === 'BO') return 'Back Office';
+      if (clean.includes('QA') || clean.includes('QUALITY')) return 'QA';
+      if (clean.includes('TRAIN')) return 'Training Operations';
+      if (clean.includes('COMM')) return 'Communications';
+      if (clean.includes('TAP')) return 'Tap';
+      return raw.trim();
+    }
+
+    function persistData() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(window.employees));
+      renderApp();
+    }
+
+    function initLocalData() {
+      const cached = localStorage.getItem(STORAGE_KEY);
+      if (cached) {
+        try {
+          window.employees = JSON.parse(cached);
+        } catch (e) {
+          window.employees = [];
+        }
+      } else {
+        window.employees = [];
+      }
+      renderApp();
+    }
+
+    // Mode & Password Handling
+    function handleModeToggle() {
+      if (isEditMode) {
+        isEditMode = false;
+        selectedIds.clear();
+        updateModeUI();
+        showToast("Switched to View-Only Mode");
+      } else {
+        document.getElementById('inputPassword').value = '';
+        document.getElementById('pwdError').classList.add('hidden');
+        document.getElementById('modalPassword').classList.remove('hidden');
+        document.getElementById('inputPassword').focus();
+      }
+    }
+
+    function closePasswordModal() {
+      document.getElementById('modalPassword').classList.add('hidden');
+    }
+
+    function verifyPassword() {
+      const entered = document.getElementById('inputPassword').value.trim().toUpperCase();
+      if (entered === AUTH_PASSWORD) {
+        isEditMode = true;
+        closePasswordModal();
+        updateModeUI();
+        showToast("Edit Mode Unlocked", "success");
+      } else {
+        document.getElementById('pwdError').classList.remove('hidden');
+      }
+    }
+
+    document.getElementById('inputPassword').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') verifyPassword();
+    });
+
+    function updateModeUI() {
+      const label = document.getElementById('labelMode');
+      const editorControls = document.getElementById('editorControls');
+      const thActions = document.getElementById('thActions');
+      const thSelectAll = document.getElementById('thSelectAll');
+      const btn = document.getElementById('btnModeToggle');
+
+      if (isEditMode) {
+        label.textContent = 'Edit Mode (Click to Lock)';
+        btn.classList.add('bg-blue-600', 'text-white', 'border-blue-500');
+        btn.classList.remove('bg-slate-800', 'text-slate-200', 'border-slate-700');
+        editorControls.classList.remove('hidden');
+        thActions.classList.remove('hidden');
+        thSelectAll.classList.remove('hidden');
+      } else {
+        label.textContent = 'View Only (Click to Edit)';
+        btn.classList.remove('bg-blue-600', 'text-white', 'border-blue-500');
+        btn.classList.add('bg-slate-800', 'text-slate-200', 'border-slate-700');
+        editorControls.classList.add('hidden');
+        thActions.classList.add('hidden');
+        thSelectAll.classList.add('hidden');
+        document.getElementById('bulkActionBar').classList.add('hidden');
+      }
+      renderApp();
+    }
+
+    function computeCredits(emp) {
+      const datesCount = (emp.dates || []).length;
+      const isDvo = isDvoGroup(emp.team);
+      const strikes = isDvo ? (emp.alertCount || 0) : 0;
+      const used = datesCount + strikes;
+      const remaining = Math.max(0, (emp.totalCredits || 5) - used);
+      return { total: emp.totalCredits || 5, used, remaining, strikes, datesCount, isDvo };
+    }
+
+    function renderApp() {
+      const query = document.getElementById('searchInput').value.toLowerCase().trim().replace(/\s+/g, ' ');
+      const deptFilter = document.getElementById('departmentFilter').value;
+      const statusFilter = document.getElementById('statusFilter').value;
+
+      const filtered = window.employees.filter(emp => {
+        const stats = computeCredits(emp);
+        const nameNorm = emp.name.toLowerCase().replace(/\s+/g, ' ');
+
+        if (query && !nameNorm.includes(query) && !emp.team.toLowerCase().includes(query)) return false;
+        if (deptFilter !== 'ALL' && emp.team !== deptFilter) return false;
+        if (statusFilter === 'HAS_ALERT' && (!stats.isDvo || stats.strikes <= 0)) return false;
+        if (statusFilter === 'ZERO_BALANCE' && stats.remaining > 0) return false;
+        if (statusFilter === 'HAS_BALANCE' && stats.remaining <= 0) return false;
+
+        return true;
+      });
+
+      document.getElementById('metricTotalUsers').textContent = filtered.length;
+      const totalStrikes = filtered.reduce((acc, curr) => isDvoGroup(curr.team) ? acc + (curr.alertCount || 0) : acc, 0);
+      document.getElementById('metricAlertStrikes').textContent = totalStrikes;
+
+      const tbody = document.getElementById('rosterTableBody');
+      tbody.innerHTML = '';
+
+      const emptyState = document.getElementById('emptyState');
+      if (filtered.length === 0) {
+        emptyState.classList.remove('hidden');
+      } else {
+        emptyState.classList.add('hidden');
+      }
+
+      filtered.forEach(emp => {
+        const stats = computeCredits(emp);
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-800/40 transition border-b border-slate-800/60';
+
+        const tdCheck = isEditMode ? `
+          <td class="px-2 py-2 text-center">
+            <input type="checkbox" onchange="toggleSelectOne('${emp.id}', this.checked)" ${selectedIds.has(emp.id) ? 'checked' : ''} class="rounded bg-slate-700 border-slate-600 text-blue-500" />
+          </td>
+        ` : '';
+
+        let dateChipsHtml = '';
+        (emp.dates || []).forEach((d, idx) => {
+          dateChipsHtml += `
+            <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] bg-slate-800 text-slate-200 border border-slate-700" title="Scheduled by: ${d.editor || 'GMSCC'}">
+              <span>${d.date}</span>
+              ${isEditMode ? `<button onclick="removeDate('${emp.id}', ${idx})" class="text-slate-400 hover:text-rose-400 font-bold ml-0.5">×</button>` : ''}
+            </span>
+          `;
+        });
+
+        // "+ Add Date" button opens modal so typing a year never triggers premature submission
+        const canAddDate = stats.remaining > 0;
+        const addDateHtml = (isEditMode && canAddDate) ? `
+          <button onclick="openAddDateModal('${emp.id}')" class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-600/30 hover:bg-blue-600/50 text-blue-300 border border-blue-500/40 transition">
+            + Add Date
+          </button>
+        ` : '';
+
+        let alertHtml = '';
+        if (stats.isDvo) {
+          alertHtml = isEditMode ? `
+            <div class="flex items-center justify-center gap-1">
+              <button onclick="updateStrike('${emp.id}', -1)" class="w-5 h-5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold flex items-center justify-center border border-slate-700">-</button>
+              <span class="px-2 py-0.5 rounded text-xs font-semibold ${stats.strikes > 0 ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'bg-slate-800 text-slate-400'}">${stats.strikes}</span>
+              <button onclick="updateStrike('${emp.id}', 1)" class="w-5 h-5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold flex items-center justify-center border border-slate-700">+</button>
+            </div>
+          ` : `
+            <div class="text-center">
+              <span class="px-2 py-0.5 rounded text-xs font-semibold ${stats.strikes > 0 ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'text-slate-500'}">${stats.strikes} strikes</span>
+            </div>
+          `;
+        } else {
+          alertHtml = `<div class="text-center text-[10px] text-slate-500">N/A (DVO only)</div>`;
+        }
+
+        const tdAction = isEditMode ? `
+          <td class="px-2 py-2 text-center">
+            <button onclick="deleteSingleMember('${emp.id}')" class="text-slate-400 hover:text-rose-400 p-1" title="Delete Member">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+              </svg>
+            </button>
+          </td>
+        ` : '';
+
+        tr.innerHTML = `
+          ${tdCheck}
+          <td class="px-3 py-2 font-medium text-white">${emp.name}</td>
+          <td class="px-2 py-2">
+            <span class="inline-flex px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-800 text-slate-300 border border-slate-700">${emp.team}</span>
+          </td>
+          <td class="px-2 py-2 text-center font-mono text-slate-300">${stats.total}</td>
+          <td class="px-2 py-2 text-center font-mono text-slate-300">${stats.used}</td>
+          <td class="px-2 py-2 text-center">
+            <span class="px-2 py-0.5 rounded font-mono font-bold text-xs ${stats.remaining === 0 ? 'bg-rose-500/20 text-rose-400' : 'bg-emerald-500/20 text-emerald-400'}">${stats.remaining}</span>
+          </td>
+          <td class="px-3 py-2">
+            <div class="flex flex-wrap items-center gap-1.5">${dateChipsHtml}${addDateHtml}</div>
+          </td>
+          <td class="px-2 py-2">${alertHtml}</td>
+          ${tdAction}
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    // Date Modal Handlers (waits until user explicitly clicks Save Date)
+    function openAddDateModal(empId) {
+      const emp = window.employees.find(e => e.id === empId);
+      if (!emp) return;
+      currentTargetEmpId = empId;
+      document.getElementById('labelDateTargetUser').textContent = `Scheduling for: ${emp.name} (${emp.team})`;
+      document.getElementById('inputModalDate').value = '';
+      document.getElementById('inputModalGmscc').value = localStorage.getItem('last_gmscc_editor_name') || '';
+      document.getElementById('modalAddDate').classList.remove('hidden');
+      document.getElementById('inputModalDate').focus();
+    }
+
+    function setPresetDate(daysToAdd) {
+      const targetDate = new Date();
+      targetDate.setDate(targetDate.getDate() + daysToAdd);
+      document.getElementById('inputModalDate').value = targetDate.toISOString().slice(0, 10);
+    }
+
+    function closeAddDateModal() {
+      currentTargetEmpId = null;
+      document.getElementById('modalAddDate').classList.add('hidden');
+    }
+
+    function confirmModalScheduleDate() {
+      const dateVal = document.getElementById('inputModalDate').value;
+      const gmsccName = document.getElementById('inputModalGmscc').value.trim();
+
+      if (!dateVal) {
+        showToast("Please enter or select a complete date.", "warning");
+        return;
+      }
+      if (!gmsccName) {
+        showToast("Please enter your GMSCC name.", "warning");
+        return;
+      }
+
+      localStorage.setItem('last_gmscc_editor_name', gmsccName);
+
+      if (currentTargetEmpId) {
+        const target = window.employees.find(e => e.id === currentTargetEmpId);
+        if (target) {
+          if (!target.dates) target.dates = [];
+          target.dates.push({ date: dateVal, editor: gmsccName });
+          persistData();
+          showToast(`Date ${dateVal} scheduled by ${gmsccName}`, "success");
+        }
+      }
+      closeAddDateModal();
+    }
+
+    function removeDate(empId, dateIdx) {
+      const target = window.employees.find(e => e.id === empId);
+      if (target && target.dates) {
+        target.dates.splice(dateIdx, 1);
+        persistData();
+        showToast("Scheduled date removed");
+      }
+    }
+
+    function updateStrike(empId, delta) {
+      const target = window.employees.find(e => e.id === empId);
+      if (target && isDvoGroup(target.team)) {
+        target.alertCount = Math.max(0, (target.alertCount || 0) + delta);
+        persistData();
+      }
+    }
+
+    function openManageMembersModal() {
+      document.getElementById('inputSingleName').value = '';
+      document.getElementById('inputBulkNames').value = '';
+      document.getElementById('modalManageMembers').classList.remove('hidden');
+    }
+
+    function closeManageMembersModal() {
+      document.getElementById('modalManageMembers').classList.add('hidden');
+    }
+
+    let activeAddTab = 'single';
+    function switchAddTab(tab) {
+      activeAddTab = tab;
+      const tabSingle = document.getElementById('tabSingleAdd');
+      const tabBulk = document.getElementById('tabBulkAdd');
+      const paneSingle = document.getElementById('paneSingleAdd');
+      const paneBulk = document.getElementById('paneBulkAdd');
+
+      if (tab === 'single') {
+        tabSingle.className = 'px-3 py-1.5 text-xs font-semibold text-blue-400 border-b-2 border-blue-400';
+        tabBulk.className = 'px-3 py-1.5 text-xs font-semibold text-slate-400 hover:text-slate-200';
+        paneSingle.classList.remove('hidden');
+        paneBulk.classList.add('hidden');
+      } else {
+        tabBulk.className = 'px-3 py-1.5 text-xs font-semibold text-blue-400 border-b-2 border-blue-400';
+        tabSingle.className = 'px-3 py-1.5 text-xs font-semibold text-slate-400 hover:text-slate-200';
+        paneBulk.classList.remove('hidden');
+        paneSingle.classList.add('hidden');
+      }
+    }
+
+    function submitAddMembers() {
+      const team = document.getElementById('selectMemberTeam').value;
+      const credits = parseInt(document.getElementById('inputMemberCredits').value) || 5;
+      const existingNames = new Set(window.employees.map(e => e.name.toLowerCase().trim().replace(/\s+/g, ' ')));
+
+      let namesToAdd = [];
+      if (activeAddTab === 'single') {
+        const val = document.getElementById('inputSingleName').value.trim();
+        if (val) namesToAdd.push(val);
+      } else {
+        namesToAdd = document.getElementById('inputBulkNames').value
+          .split('\n')
+          .map(n => n.trim())
+          .filter(n => n.length > 0);
+      }
+
+      if (namesToAdd.length === 0) {
+        showToast("Please enter at least one name.", "warning");
+        return;
+      }
+
+      let addedCount = 0;
+      let duplicateCount = 0;
+
+      namesToAdd.forEach(name => {
+        const norm = name.toLowerCase().replace(/\s+/g, ' ');
+        if (existingNames.has(norm)) {
+          duplicateCount++;
+        } else {
+          existingNames.add(norm);
+          window.employees.push({
+            id: 'emp_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+            name: name,
+            team: team,
+            totalCredits: credits,
+            dates: [],
+            alertCount: 0
+          });
+          addedCount++;
+        }
+      });
+
+      if (addedCount > 0) {
+        persistData();
+        closeManageMembersModal();
+        showToast(`Added ${addedCount} member(s). ${duplicateCount > 0 ? `(${duplicateCount} duplicates skipped)` : ''}`, "success");
+      } else {
+        showToast(`Cannot proceed! Duplicate name(s) detected.`, "error");
+      }
+    }
+
+    function deleteSingleMember(empId) {
+      window.employees = window.employees.filter(e => e.id !== empId);
+      selectedIds.delete(empId);
+      persistData();
+      showToast("Member deleted. Existing records untouched.");
+    }
+
+    function toggleSelectOne(empId, isChecked) {
+      if (isChecked) selectedIds.add(empId);
+      else selectedIds.delete(empId);
+      updateBulkActionBar();
+    }
+
+    function toggleSelectAll(isChecked) {
+      const query = document.getElementById('searchInput').value.toLowerCase().trim();
+      const deptFilter = document.getElementById('departmentFilter').value;
+      window.employees.forEach(emp => {
+        if (deptFilter !== 'ALL' && emp.team !== deptFilter) return;
+        if (query && !emp.name.toLowerCase().includes(query)) return;
+        if (isChecked) selectedIds.add(emp.id);
+        else selectedIds.delete(emp.id);
+      });
+      updateBulkActionBar();
+      renderApp();
+    }
+
+    function clearSelection() {
+      selectedIds.clear();
+      updateBulkActionBar();
+      renderApp();
+    }
+
+    function updateBulkActionBar() {
+      const bar = document.getElementById('bulkActionBar');
+      const countLabel = document.getElementById('bulkSelectedCount');
+      if (isEditMode && selectedIds.size > 0) {
+        bar.classList.remove('hidden');
+        countLabel.textContent = `${selectedIds.size} member(s) selected`;
+      } else {
+        bar.classList.add('hidden');
+      }
+    }
+
+    function handleBatchDelete() {
+      if (selectedIds.size === 0) return;
+      window.employees = window.employees.filter(e => !selectedIds.has(e.id));
+      const deletedCount = selectedIds.size;
+      selectedIds.clear();
+      persistData();
+      updateBulkActionBar();
+      showToast(`Deleted ${deletedCount} members. Remaining roster untouched.`, "success");
+    }
+
+    function openUploadModal() {
+      document.getElementById('fileUploadInput').value = '';
+      document.getElementById('modalUpload').classList.remove('hidden');
+    }
+
+    function closeUploadModal() {
+      document.getElementById('modalUpload').classList.add('hidden');
+    }
+
+    function processUploadedFile() {
+      const fileInput = document.getElementById('fileUploadInput');
+      const file = fileInput.files[0];
+      if (!file) {
+        showToast("Please choose an Excel or CSV file first.", "warning");
+        return;
+      }
+
+      const mode = document.querySelector('input[name="uploadMode"]:checked').value;
+      const reader = new FileReader();
+
+      reader.onload = function(e) {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const firstSheetName = workbook.SheetNames[0];
+          const sheet = workbook.Sheets[firstSheetName];
+          const jsonRows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+
+          let headerIdx = -1;
+          let nameCol = -1, teamCol = -1, remCol = -1;
+
+          for (let r = 0; r < Math.min(15, jsonRows.length); r++) {
+            const row = jsonRows[r];
+            if (!Array.isArray(row)) continue;
+            for (let c = 0; c < row.length; c++) {
+              const val = String(row[c] || '').toLowerCase().trim();
+              if (val.includes('name') && nameCol === -1) nameCol = c;
+              if ((val.includes('team') || val.includes('department') || val.includes('group')) && teamCol === -1) teamCol = c;
+              if ((val.includes('remain') || val.includes('credit') || val.includes('balance')) && remCol === -1) remCol = c;
+            }
+            if (nameCol !== -1) {
+              headerIdx = r;
+              break;
+            }
+          }
+
+          if (nameCol === -1) {
+            showToast("Could not find 'Name' column in file.", "error");
+            return;
+          }
+
+          const existingNames = new Set(window.employees.map(e => e.name.toLowerCase().trim().replace(/\s+/g, ' ')));
+          let processed = 0;
+
+          if (mode === 'remove') {
+            const namesToRemove = new Set();
+            for (let r = headerIdx + 1; r < jsonRows.length; r++) {
+              const row = jsonRows[r];
+              if (!row || !row[nameCol]) continue;
+              namesToRemove.add(String(row[nameCol]).toLowerCase().trim().replace(/\s+/g, ' '));
+            }
+            const beforeCount = window.employees.length;
+            window.employees = window.employees.filter(e => !namesToRemove.has(e.name.toLowerCase().trim().replace(/\s+/g, ' ')));
+            const removedCount = beforeCount - window.employees.length;
+            persistData();
+            closeUploadModal();
+            showToast(`Bulk removed ${removedCount} member(s).`, "success");
+          } else {
+            for (let r = headerIdx + 1; r < jsonRows.length; r++) {
+              const row = jsonRows[r];
+              if (!row || !row[nameCol]) continue;
+              const rawName = String(row[nameCol]).trim();
+              const normName = rawName.toLowerCase().replace(/\s+/g, ' ');
+
+              if (existingNames.has(normName)) continue;
+
+              const rawTeam = teamCol !== -1 ? String(row[teamCol] || '') : firstSheetName;
+              const assignedTeam = normalizeTeam(rawTeam);
+              const remainingVal = remCol !== -1 ? parseInt(row[remCol]) : 5;
+              const credits = isNaN(remainingVal) ? 5 : remainingVal;
+
+              existingNames.add(normName);
+              window.employees.push({
+                id: 'emp_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+                name: rawName,
+                team: assignedTeam,
+                totalCredits: credits,
+                dates: [],
+                alertCount: 0
+              });
+              processed++;
+            }
+            persistData();
+            closeUploadModal();
+            showToast(`Uploaded and added ${processed} new members.`, "success");
+          }
+        } catch (err) {
+          console.error("Upload error:", err);
+          showToast("Failed to parse file. Check format.", "error");
+        }
+      };
+
+      reader.readAsArrayBuffer(file);
+    }
+
+    function exportToCSV() {
+      if (window.employees.length === 0) {
+        showToast("No data to export.", "warning");
+        return;
+      }
+
+      const headers = ["Name", "Team / Group", "Total Credits", "Used Credits", "Remaining", "D1", "D2", "D3", "D4", "D5", "DVO Alert Strikes"];
+      const rows = [];
+
+      window.employees.forEach(emp => {
+        const stats = computeCredits(emp);
+        const dates = emp.dates || [];
+        const d1 = dates[0] ? dates[0].date : "";
+        const d2 = dates[1] ? dates[1].date : "";
+        const d3 = dates[2] ? dates[2].date : "";
+        const d4 = dates[3] ? dates[3].date : "";
+        const d5 = dates[4] ? dates[4].date : "";
+
+        rows.push([
+          `"${emp.name.replace(/"/g, '""')}"`,
+          `"${emp.team.replace(/"/g, '""')}"`,
+          stats.total,
+          stats.used,
+          stats.remaining,
+          `"${d1}"`,
+          `"${d2}"`,
+          `"${d3}"`,
+          `"${d4}"`,
+          `"${d5}"`,
+          stats.isDvo ? stats.strikes : 0
+        ]);
+      });
+
+      const csvContent = "\uFEFF" + [headers.join(","), ...rows.map(r => r.join(","))].join("\r\n");
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", `HTO_Roster_Export_${new Date().toISOString().slice(0, 10)}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      showToast("CSV report exported successfully.", "success");
+    }
+
+    function openGuideModal() {
+      switchGuideTab(isEditMode ? 'editor' : 'viewer');
+      document.getElementById('modalGuide').classList.remove('hidden');
+    }
+
+    function closeGuideModal() {
+      document.getElementById('modalGuide').classList.add('hidden');
+    }
+
+    function switchGuideTab(tab) {
+      const tabViewer = document.getElementById('guideTabViewer');
+      const tabEditor = document.getElementById('guideTabEditor');
+      const contentViewer = document.getElementById('guideContentViewer');
+      const contentEditor = document.getElementById('guideContentEditor');
+
+      if (tab === 'viewer') {
+        tabViewer.className = 'px-3 py-1.5 text-xs font-semibold text-blue-400 border-b-2 border-blue-400';
+        tabEditor.className = 'px-3 py-1.5 text-xs font-semibold text-slate-400 hover:text-slate-200';
+        contentViewer.classList.remove('hidden');
+        contentEditor.classList.add('hidden');
+      } else {
+        if (!isEditMode) {
+          showToast("Unlock Edit Mode to access editor documentation.", "warning");
+          return;
+        }
+        tabEditor.className = 'px-3 py-1.5 text-xs font-semibold text-blue-400 border-b-2 border-blue-400';
+        tabViewer.className = 'px-3 py-1.5 text-xs font-semibold text-slate-400 hover:text-slate-200';
+        contentEditor.classList.remove('hidden');
+        contentViewer.classList.add('hidden');
+      }
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('view') === 'readonly') {
+        document.getElementById('btnModeToggle').style.display = 'none';
+      }
+      initLocalData();
+    });
+  </script>
+</body>
+</html>
