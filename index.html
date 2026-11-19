@@ -1,0 +1,1060 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>2026 Holiday Time Off (HTO) Tracker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+  <!-- Firebase App & Firestore Compat SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
+  <style>
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0f172a; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #475569; }
+    input[type="date"]::-webkit-calendar-picker-indicator {
+      filter: invert(1);
+      cursor: pointer;
+      opacity: 0.8;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans antialiased text-sm">
+
+  <!-- ================= TOP HEADER ================= -->
+  <header class="sticky top-0 z-30 bg-slate-900/95 backdrop-blur border-b border-slate-800 shadow-md px-4 py-2.5">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
+      
+      <!-- Brand Title -->
+      <div class="flex items-center gap-3">
+        <div class="bg-emerald-500/10 text-emerald-400 p-2 rounded-lg border border-emerald-500/20">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+          </svg>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-base font-bold tracking-tight text-white">2026 HTO Tracker</h1>
+            <span id="syncBadge" class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Connecting...
+            </span>
+          </div>
+          <p class="text-[11px] text-slate-400">Automated Holiday Time Off & Audit Balance System</p>
+        </div>
+      </div>
+
+      <!-- Action Toolbar -->
+      <div class="flex items-center gap-2 flex-wrap">
+        <!-- Edit Access Button -->
+        <button id="btnEditAccess" onclick="handleEditAccessClick()" class="px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 shadow-sm">
+          <svg id="iconLockState" class="w-3.5 h-3.5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+          </svg>
+          <span id="labelEditAccess">Request Edit Access</span>
+        </button>
+
+        <!-- Guide -->
+        <button onclick="openGuideModal()" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition">
+          Guide
+        </button>
+
+        <!-- Export CSV -->
+        <button onclick="exportToCSV()" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition" title="Export CSV (Available to Viewers & Editors)">
+          Export CSV
+        </button>
+
+        <!-- Editor Toolbar -->
+        <div id="editorControls" class="hidden flex items-center gap-2">
+          <button onclick="openUploadModal()" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white shadow transition">
+            Upload File
+          </button>
+          <button onclick="openManageMembersModal()" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow transition">
+            Manage Members
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ================= MAIN CONTAINER ================= -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-4 flex flex-col gap-4">
+
+    <!-- Top Summary Metrics Grid -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-3 flex items-center justify-between">
+        <div>
+          <span class="text-xs text-slate-400 font-medium uppercase tracking-wider">Users</span>
+          <p id="metricTotalUsers" class="text-2xl font-bold text-white mt-0.5">0</p>
+        </div>
+        <div class="bg-blue-500/10 text-blue-400 p-2.5 rounded-lg border border-blue-500/20">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+          </svg>
+        </div>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-3 flex items-center justify-between">
+        <div>
+          <span class="text-xs text-slate-400 font-medium uppercase tracking-wider">DVO Alert Deductions</span>
+          <p id="metricAlertStrikes" class="text-2xl font-bold text-rose-400 mt-0.5">0</p>
+        </div>
+        <div class="bg-rose-500/10 text-rose-400 p-2.5 rounded-lg border border-rose-500/20">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+          </svg>
+        </div>
+      </div>
+    </div>
+
+    <!-- Filters & Search Toolbar -->
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-3 flex flex-wrap items-center gap-3">
+      <div class="relative flex-1 min-w-[220px]">
+        <input type="text" id="searchInput" oninput="renderApp()" placeholder="Search employee name or team..." class="w-full px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-400 focus:outline-none focus:border-blue-500" />
+      </div>
+
+      <div class="w-auto min-w-[180px]">
+        <select id="departmentFilter" onchange="renderApp()" class="w-full px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-blue-500">
+          <option value="ALL">All Departments / Groups</option>
+          <option value="T1MSG">T1MSG</option>
+          <option value="T1VIN">T1VIN</option>
+          <option value="SMM">SMM</option>
+          <option value="T2">T2</option>
+          <option value="Back Office">Back Office</option>
+          <option value="Managers & Leads">Managers & Leads</option>
+          <option value="QA">QA</option>
+          <option value="Training Operations">Training Operations</option>
+          <option value="Communications">Communications</option>
+          <option value="Tap">Tap</option>
+        </select>
+      </div>
+
+      <div class="w-auto min-w-[160px]">
+        <select id="statusFilter" onchange="renderApp()" class="w-full px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-blue-500">
+          <option value="ALL">All Records</option>
+          <option value="HAS_ALERT">DVO with Alerts (≥1)</option>
+          <option value="ZERO_BALANCE">Zero Balance Left</option>
+          <option value="HAS_BALANCE">Has Available Balance</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Multi-select Bulk Action Bar -->
+    <div id="bulkActionBar" class="hidden bg-slate-800 border border-slate-700 rounded-lg p-2.5 flex items-center justify-between text-xs">
+      <span id="bulkSelectedCount" class="font-semibold text-slate-200">0 selected</span>
+      <div class="flex items-center gap-2">
+        <button onclick="handleBatchDelete()" class="px-2.5 py-1 bg-rose-600 hover:bg-rose-500 text-white rounded font-medium transition">
+          Delete Selected
+        </button>
+        <button onclick="clearSelection()" class="px-2.5 py-1 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded transition">
+          Deselect All
+        </button>
+      </div>
+    </div>
+
+    <!-- Table Viewport -->
+    <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden flex-1 flex flex-col min-h-[400px]">
+      <div class="overflow-y-auto max-h-[calc(100vh-320px)] relative">
+        <table class="w-full text-left text-xs border-collapse">
+          <thead class="sticky top-0 z-20 bg-slate-800 text-slate-300 border-b border-slate-700 select-none shadow-sm">
+            <tr>
+              <th id="thSelectAll" class="w-8 px-2 py-2.5 text-center hidden">
+                <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll(this.checked)" class="rounded bg-slate-700 border-slate-600 text-blue-500" />
+              </th>
+              <th class="w-48 px-3 py-2.5 font-semibold tracking-wider">NAME</th>
+              <th class="w-32 px-2 py-2.5 font-semibold tracking-wider">TEAM / GROUP</th>
+              <th class="w-12 px-2 py-2.5 font-semibold text-center tracking-wider">TOTAL</th>
+              <th class="w-12 px-2 py-2.5 font-semibold text-center tracking-wider">USED</th>
+              <th class="w-16 px-2 py-2.5 font-semibold text-center tracking-wider">REMAINING</th>
+              <th class="px-3 py-2.5 font-semibold tracking-wider">SCHEDULED DATES (HTO)</th>
+              <th class="w-32 px-2 py-2.5 font-semibold text-center tracking-wider">ALERT: NO ANSWER</th>
+              <th id="thActions" class="w-12 px-2 py-2.5 font-semibold text-center tracking-wider hidden">ACTION</th>
+            </tr>
+          </thead>
+          <tbody id="rosterTableBody" class="divide-y divide-slate-800/80"></tbody>
+        </table>
+      </div>
+
+      <div id="emptyState" class="hidden flex-1 flex flex-col items-center justify-center p-8 text-center">
+        <h3 class="text-sm font-semibold text-white">No Personnel Records</h3>
+        <p class="text-xs text-slate-400 mt-1">Click <strong>Request Edit Access</strong> above to add personnel or upload rosters.</p>
+      </div>
+    </div>
+  </main>
+
+  <!-- ================= MODALS ================= -->
+
+  <!-- Password Modal -->
+  <div id="modalPassword" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-xl max-w-sm w-full p-5 shadow-2xl">
+      <h3 class="text-sm font-bold text-white flex items-center gap-2">Password Required for Edit Access</h3>
+      <p class="text-xs text-slate-400 mt-1">Please enter password to unlock edit controls.</p>
+      <input type="password" id="inputPassword" placeholder="Enter password" class="w-full mt-3 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-blue-500" />
+      <div id="pwdError" class="hidden text-rose-400 text-[11px] mt-1 font-medium">Incorrect password. Please try again.</div>
+      <div class="flex justify-end gap-2 mt-4">
+        <button onclick="closePasswordModal()" class="px-3 py-1.5 rounded-lg text-xs bg-slate-800 text-slate-300 hover:bg-slate-700">Cancel</button>
+        <button onclick="verifyPassword()" class="px-3 py-1.5 rounded-lg text-xs bg-blue-600 text-white font-medium hover:bg-blue-500">Unlock Edit Access</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Interactive Date Picker Modal -->
+  <div id="modalAddDate" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-xl max-w-md w-full p-5 shadow-2xl">
+      <div class="flex justify-between items-center pb-2 border-b border-slate-800">
+        <h3 class="text-sm font-bold text-white flex items-center gap-2">Select Any Scheduled Date</h3>
+        <button onclick="closeAddDateModal()" class="text-slate-400 hover:text-white">✕</button>
+      </div>
+      <p id="labelDateTargetUser" class="text-xs text-blue-400 font-semibold mt-2">Scheduling for Employee</p>
+
+      <div class="mt-4 space-y-4">
+        <div>
+          <label class="block text-[11px] text-slate-300 uppercase font-semibold mb-1">Pick Any Date *</label>
+          <input type="date" id="inputModalDate" class="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500 cursor-pointer" />
+          <div class="flex items-center gap-2 mt-2">
+            <span class="text-[10px] text-slate-400">Quick Picks:</span>
+            <button type="button" onclick="setPresetDate(0)" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 border border-slate-700">Today</button>
+            <button type="button" onclick="setPresetDate(1)" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 border border-slate-700">Tomorrow</button>
+            <button type="button" onclick="setPresetDate(7)" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 border border-slate-700">+1 Week</button>
+            <button type="button" onclick="setPresetDate(30)" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 border border-slate-700">+1 Month</button>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-[11px] text-slate-300 uppercase font-semibold mb-1">GMSCC Name *</label>
+          <input type="text" id="inputModalGmscc" placeholder="e.g. Jane Doe" class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-blue-500" />
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-2 mt-5 pt-3 border-t border-slate-800">
+        <button onclick="closeAddDateModal()" class="px-3 py-1.5 rounded-lg text-xs bg-slate-800 text-slate-300 hover:bg-slate-700">Cancel</button>
+        <button onclick="confirmModalScheduleDate()" class="px-4 py-1.5 rounded-lg text-xs bg-blue-600 text-white font-medium hover:bg-blue-500 shadow">Save Date</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Manage Members Hub Modal -->
+  <div id="modalManageMembers" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-xl max-w-lg w-full p-5 shadow-2xl max-h-[90vh] flex flex-col">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+        <h3 class="text-sm font-bold text-white">Manage Members Hub</h3>
+        <button onclick="closeManageMembersModal()" class="text-slate-400 hover:text-white">✕</button>
+      </div>
+      <div class="overflow-y-auto flex-1 py-4 space-y-4">
+        <div class="flex border-b border-slate-800">
+          <button id="tabSingleAdd" onclick="switchAddTab('single')" class="px-3 py-1.5 text-xs font-semibold text-blue-400 border-b-2 border-blue-400">Single Member</button>
+          <button id="tabBulkAdd" onclick="switchAddTab('bulk')" class="px-3 py-1.5 text-xs font-semibold text-slate-400 hover:text-slate-200">Bulk Paste Names</button>
+        </div>
+
+        <div id="paneSingleAdd" class="space-y-3">
+          <div>
+            <label class="block text-[11px] text-slate-400 font-semibold mb-1">Employee Full Name *</label>
+            <input type="text" id="inputSingleName" placeholder="Enter full name" class="w-full px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-xs text-white" />
+          </div>
+        </div>
+
+        <div id="paneBulkAdd" class="hidden space-y-3">
+          <div>
+            <label class="block text-[11px] text-slate-400 font-semibold mb-1">Paste Names (One name per line)</label>
+            <textarea id="inputBulkNames" rows="5" placeholder="John Doe&#10;Jane Smith&#10;Maria Santos" class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-xs text-white"></textarea>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3 pt-2 border-t border-slate-800">
+          <div>
+            <label class="block text-[11px] text-slate-400 font-semibold mb-1">Department / Group *</label>
+            <select id="selectMemberTeam" class="w-full px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-xs text-white">
+              <option value="T1MSG">T1MSG</option>
+              <option value="T1VIN">T1VIN</option>
+              <option value="SMM">SMM</option>
+              <option value="T2">T2</option>
+              <option value="Back Office">Back Office</option>
+              <option value="Managers & Leads">Managers & Leads</option>
+              <option value="QA">QA</option>
+              <option value="Training Operations">Training Operations</option>
+              <option value="Communications">Communications</option>
+              <option value="Tap">Tap</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[11px] text-slate-400 font-semibold mb-1">Total Leave Credits</label>
+            <input type="number" id="inputMemberCredits" value="5" min="1" max="20" class="w-full px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-xs text-white" />
+          </div>
+        </div>
+      </div>
+      <div class="pt-3 border-t border-slate-800 flex justify-end gap-2">
+        <button onclick="closeManageMembersModal()" class="px-3 py-1.5 rounded-lg text-xs bg-slate-800 text-slate-300">Cancel</button>
+        <button onclick="submitAddMembers()" class="px-3 py-1.5 rounded-lg text-xs bg-emerald-600 text-white font-medium">Add Member(s)</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Upload Excel Modal -->
+  <div id="modalUpload" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-xl max-w-md w-full p-5 shadow-2xl">
+      <h3 class="text-sm font-bold text-white">Upload Excel / CSV Roster</h3>
+      <p class="text-xs text-slate-400 mt-1">Columns: <span class="text-white font-semibold">Name</span>, <span class="text-white font-semibold">Department / Team</span>, <span class="text-white font-semibold">Remaining</span></p>
+      
+      <div class="mt-4 flex gap-4 text-xs font-semibold">
+        <label class="flex items-center gap-1.5 text-slate-300 cursor-pointer">
+          <input type="radio" name="uploadMode" value="add" checked class="text-blue-500"> Add New Only (Keep Existing Intact)
+        </label>
+        <label class="flex items-center gap-1.5 text-slate-300 cursor-pointer">
+          <input type="radio" name="uploadMode" value="remove" class="text-rose-500"> Bulk Remove Listed
+        </label>
+      </div>
+
+      <input type="file" id="fileUploadInput" accept=".xlsx, .xls, .csv" class="mt-4 w-full text-xs text-slate-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-slate-800 file:text-blue-400 cursor-pointer" />
+      <div class="flex justify-end gap-2 mt-5">
+        <button onclick="closeUploadModal()" class="px-3 py-1.5 rounded-lg text-xs bg-slate-800 text-slate-300">Cancel</button>
+        <button onclick="processUploadedFile()" class="px-3 py-1.5 rounded-lg text-xs bg-blue-600 text-white font-medium">Process File</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Guide Modal -->
+  <div id="modalGuide" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-xl max-w-xl w-full p-5 shadow-2xl">
+      <div class="flex justify-between items-center pb-2 border-b border-slate-800">
+        <h3 class="text-sm font-bold text-white">HTO Tracker Guide</h3>
+        <button onclick="closeGuideModal()" class="text-slate-400 hover:text-white">✕</button>
+      </div>
+      <div class="py-3 text-xs space-y-2 text-slate-300">
+        <p><strong class="text-white">Balance Formula:</strong> Remaining = Total Credits - (Scheduled Dates + DVO Alert Strikes)</p>
+        <p><strong class="text-white">Strict Record Isolation:</strong> Importing a roster, adding/deleting members, scheduling dates, or adjusting alert strikes affects <strong>only the targeted individual</strong>—existing staff records and balances are never overwritten or recalculated.</p>
+        <p><strong class="text-white">Auditing:</strong> Dates record the GMSCC Name on hover.</p>
+      </div>
+      <div class="flex justify-end pt-2 border-t border-slate-800">
+        <button onclick="closeGuideModal()" class="px-3 py-1.5 bg-slate-800 text-slate-300 text-xs rounded-lg">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toastContainer" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2"></div>
+
+  <!-- ================= FIREBASE & APP JAVASCRIPT ================= -->
+  <script>
+    // ============================================================
+    // 1. FIREBASE CONFIGURATION (Replace placeholders if using live sync)
+    // ============================================================
+    const firebaseConfig = {
+      apiKey: "YOUR_API_KEY",
+      authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+      projectId: "YOUR_PROJECT_ID",
+      storageBucket: "YOUR_PROJECT_ID.appspot.com",
+      messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+      appId: "YOUR_APP_ID"
+    };
+
+    let db = null;
+    let isFirebaseReady = false;
+    try {
+      if (firebaseConfig.apiKey && firebaseConfig.apiKey !== "YOUR_API_KEY") {
+        firebase.initializeApp(firebaseConfig);
+        db = firebase.firestore();
+        isFirebaseReady = true;
+      }
+    } catch (err) {
+      console.warn("Firebase init notice:", err);
+    }
+
+    const AUTH_PASSWORD = "GMSCC";
+    const STORAGE_KEY = "hto_roster_isolated_v3";
+    let isEditMode = false;
+    let currentTargetEmpId = null;
+    let activeAddTab = 'single';
+    let selectedIds = new Set();
+
+    window.employees = [];
+
+    // Generate guaranteed collision-free ID per employee
+    function generateUniqueId() {
+      if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        return 'emp_' + crypto.randomUUID();
+      }
+      return 'emp_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 10);
+    }
+
+    // Ensure every loaded employee object has a unique ID and isolated arrays
+    function sanitizeEmployeeRecords(list) {
+      if (!Array.isArray(list)) return [];
+      const seenIds = new Set();
+      return list.map(emp => {
+        let uid = emp.id;
+        if (!uid || seenIds.has(uid)) {
+          uid = generateUniqueId();
+        }
+        seenIds.add(uid);
+        return {
+          id: uid,
+          name: String(emp.name || '').trim(),
+          team: String(emp.team || 'Back Office').trim(),
+          totalCredits: typeof emp.totalCredits === 'number' && !isNaN(emp.totalCredits) ? emp.totalCredits : 5,
+          dates: Array.isArray(emp.dates) ? emp.dates.map(d => ({ date: d.date, editor: d.editor || 'GMSCC' })) : [],
+          alertCount: typeof emp.alertCount === 'number' && !isNaN(emp.alertCount) ? Math.max(0, emp.alertCount) : 0
+        };
+      });
+    }
+
+    function updateSyncBadge(state, text) {
+      const badge = document.getElementById('syncBadge');
+      if (!badge) return;
+      if (state === 'live') {
+        badge.className = 'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30';
+        badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> ${text}`;
+      } else if (state === 'syncing') {
+        badge.className = 'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-blue-500/20 text-blue-300 border border-blue-500/30';
+        badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-blue-400 animate-ping"></span> ${text}`;
+      } else {
+        badge.className = 'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-slate-800 text-slate-300 border border-slate-700';
+        badge.innerHTML = text;
+      }
+    }
+
+    function initDataStore() {
+      if (!isFirebaseReady || !db) {
+        updateSyncBadge('local', 'Standalone Storage Active');
+        loadLocalFallback();
+        return;
+      }
+
+      db.collection("hto_tracker").doc("shared_roster")
+        .onSnapshot((doc) => {
+          updateSyncBadge('live', 'Firebase Live Active');
+          if (doc.exists && doc.data().rosterPayload) {
+            try {
+              const parsed = JSON.parse(doc.data().rosterPayload);
+              window.employees = sanitizeEmployeeRecords(parsed);
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(window.employees));
+              renderApp();
+            } catch (e) {
+              console.error("Roster parse error:", e);
+            }
+          } else if (doc.exists && Array.isArray(doc.data().roster)) {
+            window.employees = sanitizeEmployeeRecords(doc.data().roster);
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(window.employees));
+            renderApp();
+          } else {
+            window.employees = [];
+            persistData();
+          }
+        }, (err) => {
+          console.error("Firestore sync error:", err);
+          updateSyncBadge('local', 'Local Storage Fallback');
+          loadLocalFallback();
+        });
+    }
+
+    function persistData() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(window.employees));
+      renderApp();
+
+      if (isFirebaseReady && db) {
+        updateSyncBadge('syncing', 'Syncing...');
+        db.collection("hto_tracker").doc("shared_roster")
+          .set({
+            rosterPayload: JSON.stringify(window.employees),
+            updatedAt: new Date().toISOString()
+          }, { merge: true })
+          .then(() => updateSyncBadge('live', 'Firebase Live Active'))
+          .catch(err => {
+            console.error("Firestore write error:", err);
+            updateSyncBadge('local', 'Saved Locally');
+          });
+      }
+    }
+
+    function loadLocalFallback() {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        window.employees = saved ? sanitizeEmployeeRecords(JSON.parse(saved)) : [];
+      } catch (e) {
+        window.employees = [];
+      }
+      renderApp();
+    }
+
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      const colors = {
+        success: 'bg-emerald-600 text-white',
+        error: 'bg-rose-600 text-white',
+        warning: 'bg-amber-600 text-white',
+        info: 'bg-slate-800 text-slate-200 border border-slate-700'
+      };
+      toast.className = `px-3.5 py-2 rounded-lg text-xs font-medium shadow-lg transition transform duration-200 flex items-center gap-2 ${colors[type] || colors.info}`;
+      toast.textContent = message;
+      container.appendChild(toast);
+      setTimeout(() => toast.remove(), 3500);
+    }
+
+    function isDvoGroup(team) {
+      if (!team) return false;
+      return ['T1MSG', 'T1VIN', 'SMM', 'T2'].includes(team.trim().toUpperCase());
+    }
+
+    function normalizeTeamGroup(raw) {
+      if (!raw) return 'Back Office';
+      const clean = String(raw).trim().toLowerCase().replace(/[\s\-_]/g, '');
+      if (clean === 't1msg') return 'T1MSG';
+      if (clean === 't1vin') return 'T1VIN';
+      if (clean === 'smm') return 'SMM';
+      if (clean === 't2') return 'T2';
+      if (clean.includes('manag') || clean.includes('lead') || clean === 'tl') return 'Managers & Leads';
+      if (clean.includes('back') || clean === 'bo' || clean.includes('office')) return 'Back Office';
+      if (clean.includes('qa') || clean.includes('quality')) return 'QA';
+      if (clean.includes('train')) return 'Training Operations';
+      if (clean.includes('comm')) return 'Communications';
+      if (clean.includes('tap')) return 'Tap';
+      return String(raw).trim();
+    }
+
+    // Isolated per-employee credit computation
+    function computeCredits(emp) {
+      const datesCount = Array.isArray(emp.dates) ? emp.dates.length : 0;
+      const isDvo = isDvoGroup(emp.team);
+      const strikes = isDvo ? (emp.alertCount || 0) : 0;
+      const total = typeof emp.totalCredits === 'number' ? emp.totalCredits : 5;
+      const used = datesCount + strikes;
+      const remaining = Math.max(0, total - used);
+      return { total, used, remaining, strikes, datesCount, isDvo };
+    }
+
+    // --- Edit Access Handlers ---
+    function handleEditAccessClick() {
+      if (isEditMode) {
+        isEditMode = false;
+        selectedIds.clear();
+        updateEditAccessUI();
+        showToast("Edit Access Locked");
+      } else {
+        document.getElementById('inputPassword').value = '';
+        document.getElementById('pwdError').classList.add('hidden');
+        document.getElementById('modalPassword').classList.remove('hidden');
+        document.getElementById('inputPassword').focus();
+      }
+    }
+
+    function closePasswordModal() { document.getElementById('modalPassword').classList.add('hidden'); }
+
+    function verifyPassword() {
+      const entered = document.getElementById('inputPassword').value.trim().toUpperCase();
+      if (entered === AUTH_PASSWORD) {
+        isEditMode = true;
+        closePasswordModal();
+        updateEditAccessUI();
+        showToast("Edit Access Granted", "success");
+        if (currentTargetEmpId) openAddDateDialog(currentTargetEmpId);
+      } else {
+        document.getElementById('pwdError').classList.remove('hidden');
+      }
+    }
+
+    document.getElementById('inputPassword').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') verifyPassword();
+    });
+
+    function updateEditAccessUI() {
+      const label = document.getElementById('labelEditAccess');
+      const icon = document.getElementById('iconLockState');
+      const btn = document.getElementById('btnEditAccess');
+      const editorControls = document.getElementById('editorControls');
+      const thActions = document.getElementById('thActions');
+      const thSelectAll = document.getElementById('thSelectAll');
+
+      if (isEditMode) {
+        label.textContent = 'Lock Edit Access';
+        btn.className = 'px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-500 shadow-sm';
+        icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"/>';
+        editorControls.classList.remove('hidden');
+        thActions.classList.remove('hidden');
+        thSelectAll.classList.remove('hidden');
+      } else {
+        label.textContent = 'Request Edit Access';
+        btn.className = 'px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 shadow-sm';
+        icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>';
+        editorControls.classList.add('hidden');
+        thActions.classList.add('hidden');
+        thSelectAll.classList.add('hidden');
+        document.getElementById('bulkActionBar').classList.add('hidden');
+      }
+      renderApp();
+    }
+
+    // --- Isolated Date Scheduling ---
+    function handleAddDateClick(empId) {
+      currentTargetEmpId = empId;
+      if (!isEditMode) {
+        handleEditAccessClick();
+        return;
+      }
+      openAddDateDialog(empId);
+    }
+
+    function openAddDateDialog(empId) {
+      const emp = window.employees.find(e => e.id === empId);
+      if (!emp) return;
+      currentTargetEmpId = empId;
+      document.getElementById('labelDateTargetUser').textContent = `Scheduling for: ${emp.name} (${emp.team})`;
+      document.getElementById('inputModalDate').value = new Date().toISOString().slice(0, 10);
+      document.getElementById('inputModalGmscc').value = localStorage.getItem('last_gmscc_name') || '';
+      document.getElementById('modalAddDate').classList.remove('hidden');
+      document.getElementById('inputModalDate').focus();
+    }
+
+    function setPresetDate(daysToAdd) {
+      const targetDate = new Date();
+      targetDate.setDate(targetDate.getDate() + daysToAdd);
+      document.getElementById('inputModalDate').value = targetDate.toISOString().slice(0, 10);
+    }
+
+    function closeAddDateModal() {
+      document.getElementById('modalAddDate').classList.add('hidden');
+      currentTargetEmpId = null;
+    }
+
+    function confirmModalScheduleDate() {
+      const dateVal = document.getElementById('inputModalDate').value;
+      const gmsccVal = document.getElementById('inputModalGmscc').value.trim();
+
+      if (!dateVal) { showToast("Please enter or select a complete date.", "warning"); return; }
+      if (!gmsccVal) { showToast("Please enter your GMSCC name.", "warning"); return; }
+
+      localStorage.setItem('last_gmscc_name', gmsccVal);
+      const targetId = currentTargetEmpId;
+
+      // Immutable update targeting ONLY targetId
+      window.employees = window.employees.map(emp => {
+        if (emp.id !== targetId) return emp;
+        const existingDates = Array.isArray(emp.dates) ? [...emp.dates] : [];
+        return {
+          ...emp,
+          dates: [...existingDates, { date: dateVal, editor: gmsccVal }]
+        };
+      });
+
+      persistData();
+      showToast(`Date ${dateVal} added by ${gmsccVal}`, "success");
+      closeAddDateModal();
+    }
+
+    function removeDate(empId, dateIdx) {
+      if (!isEditMode) { handleEditAccessClick(); return; }
+
+      // Immutable update targeting ONLY empId
+      window.employees = window.employees.map(emp => {
+        if (emp.id !== empId) return emp;
+        const updatedDates = (emp.dates || []).filter((_, idx) => idx !== dateIdx);
+        return { ...emp, dates: updatedDates };
+      });
+
+      persistData();
+      showToast("Scheduled date removed");
+    }
+
+    // --- Isolated Alert: No Answer Stepper ---
+    function updateStrike(empId, delta) {
+      if (!isEditMode) { handleEditAccessClick(); return; }
+
+      // Immutable update targeting ONLY empId (and only if DVO)
+      window.employees = window.employees.map(emp => {
+        if (emp.id !== empId || !isDvoGroup(emp.team)) return emp;
+        const nextCount = Math.max(0, (emp.alertCount || 0) + delta);
+        return { ...emp, alertCount: nextCount };
+      });
+
+      persistData();
+    }
+
+    // --- Table Rendering ---
+    function renderApp() {
+      const query = document.getElementById('searchInput').value.toLowerCase().trim().replace(/\s+/g, ' ');
+      const deptFilter = document.getElementById('departmentFilter').value;
+      const statusFilter = document.getElementById('statusFilter').value;
+
+      const filtered = window.employees.filter(emp => {
+        const stats = computeCredits(emp);
+        const nameNorm = emp.name.toLowerCase().replace(/\s+/g, ' ');
+        if (query && !nameNorm.includes(query) && !emp.team.toLowerCase().includes(query)) return false;
+        if (deptFilter !== 'ALL' && emp.team !== deptFilter) return false;
+        if (statusFilter === 'HAS_ALERT' && (!stats.isDvo || stats.strikes <= 0)) return false;
+        if (statusFilter === 'ZERO_BALANCE' && stats.remaining > 0) return false;
+        if (statusFilter === 'HAS_BALANCE' && stats.remaining <= 0) return false;
+        return true;
+      });
+
+      document.getElementById('metricTotalUsers').textContent = filtered.length;
+      const totalStrikes = filtered.reduce((acc, curr) => isDvoGroup(curr.team) ? acc + (curr.alertCount || 0) : acc, 0);
+      document.getElementById('metricAlertStrikes').textContent = totalStrikes;
+
+      const tbody = document.getElementById('rosterTableBody');
+      tbody.innerHTML = '';
+
+      const emptyState = document.getElementById('emptyState');
+      if (filtered.length === 0) emptyState.classList.remove('hidden');
+      else emptyState.classList.add('hidden');
+
+      filtered.forEach(emp => {
+        const stats = computeCredits(emp);
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-800/40 transition border-b border-slate-800/60';
+
+        const tdCheck = isEditMode ? `
+          <td class="px-2 py-2 text-center">
+            <input type="checkbox" onchange="toggleSelectOne('${emp.id}', this.checked)" ${selectedIds.has(emp.id) ? 'checked' : ''} class="rounded bg-slate-700 border-slate-600 text-blue-500" />
+          </td>
+        ` : '';
+
+        let dateChipsHtml = '';
+        (emp.dates || []).forEach((d, idx) => {
+          dateChipsHtml += `
+            <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] bg-slate-800 text-slate-200 border border-slate-700 shadow-sm" title="Scheduled by: ${d.editor || 'GMSCC'}">
+              <span>${d.date}</span>
+              ${isEditMode ? `<button onclick="removeDate('${emp.id}', ${idx})" class="text-slate-400 hover:text-rose-400 font-bold ml-0.5" title="Remove Date">×</button>` : ''}
+            </span>
+          `;
+        });
+
+        let addDateBtnHtml = '';
+        if (stats.remaining > 0) {
+          addDateBtnHtml = `
+            <button onclick="handleAddDateClick('${emp.id}')" class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-600/30 hover:bg-blue-600/50 text-blue-300 border border-blue-500/40 transition shadow-sm" title="Pick any date">
+              <span>+ Add Date</span>
+            </button>
+          `;
+        } else {
+          addDateBtnHtml = `<span class="text-[10px] text-slate-500 font-medium italic">Depleted</span>`;
+        }
+
+        let alertHtml = '';
+        if (stats.isDvo) {
+          alertHtml = isEditMode ? `
+            <div class="flex items-center justify-center gap-1">
+              <button onclick="updateStrike('${emp.id}', -1)" class="w-5 h-5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold flex items-center justify-center border border-slate-700">-</button>
+              <span class="px-2 py-0.5 rounded text-xs font-semibold ${stats.strikes > 0 ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'bg-slate-800 text-slate-400'}">${stats.strikes}</span>
+              <button onclick="updateStrike('${emp.id}', 1)" class="w-5 h-5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold flex items-center justify-center border border-slate-700">+</button>
+            </div>
+          ` : `
+            <div class="text-center">
+              <span class="px-2 py-0.5 rounded text-xs font-semibold ${stats.strikes > 0 ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'text-slate-500'}">${stats.strikes} strikes</span>
+            </div>
+          `;
+        } else {
+          alertHtml = `<div class="text-center text-[10px] text-slate-500">N/A (DVO only)</div>`;
+        }
+
+        const tdAction = isEditMode ? `
+          <td class="px-2 py-2 text-center">
+            <button onclick="deleteSingleMember('${emp.id}')" class="text-slate-400 hover:text-rose-400 p-1" title="Delete Member">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+              </svg>
+            </button>
+          </td>
+        ` : '';
+
+        tr.innerHTML = `
+          ${tdCheck}
+          <td class="px-3 py-2 font-medium text-white">${emp.name}</td>
+          <td class="px-2 py-2">
+            <span class="inline-flex px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-800 text-slate-300 border border-slate-700">${emp.team}</span>
+          </td>
+          <td class="px-2 py-2 text-center font-mono text-slate-300">${stats.total}</td>
+          <td class="px-2 py-2 text-center font-mono text-slate-300">${stats.used}</td>
+          <td class="px-2 py-2 text-center">
+            <span class="px-2 py-0.5 rounded font-mono font-bold text-xs ${stats.remaining === 0 ? 'bg-rose-500/20 text-rose-400' : 'bg-emerald-500/20 text-emerald-400'}">${stats.remaining}</span>
+          </td>
+          <td class="px-3 py-2">
+            <div class="flex flex-wrap items-center gap-1.5">${dateChipsHtml}${addDateBtnHtml}</div>
+          </td>
+          <td class="px-2 py-2">${alertHtml}</td>
+          ${tdAction}
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    // --- Isolated Member Management (Append-Only / Target-Only Delete) ---
+    function openManageMembersModal() {
+      document.getElementById('inputSingleName').value = '';
+      document.getElementById('inputBulkNames').value = '';
+      switchAddTab('single');
+      document.getElementById('modalManageMembers').classList.remove('hidden');
+    }
+    function closeManageMembersModal() { document.getElementById('modalManageMembers').classList.add('hidden'); }
+
+    function switchAddTab(tab) {
+      activeAddTab = tab;
+      const tabSingle = document.getElementById('tabSingleAdd');
+      const tabBulk = document.getElementById('tabBulkAdd');
+      const paneSingle = document.getElementById('paneSingleAdd');
+      const paneBulk = document.getElementById('paneBulkAdd');
+
+      if (tab === 'single') {
+        tabSingle.className = 'px-3 py-1.5 text-xs font-semibold text-blue-400 border-b-2 border-blue-400';
+        tabBulk.className = 'px-3 py-1.5 text-xs font-semibold text-slate-400 hover:text-slate-200';
+        paneSingle.classList.remove('hidden');
+        paneBulk.classList.add('hidden');
+      } else {
+        tabBulk.className = 'px-3 py-1.5 text-xs font-semibold text-blue-400 border-b-2 border-blue-400';
+        tabSingle.className = 'px-3 py-1.5 text-xs font-semibold text-slate-400 hover:text-slate-200';
+        paneBulk.classList.remove('hidden');
+        paneSingle.classList.add('hidden');
+      }
+    }
+
+    function submitAddMembers() {
+      const team = document.getElementById('selectMemberTeam').value;
+      const credits = parseInt(document.getElementById('inputMemberCredits').value) || 5;
+      const existingNames = new Set(window.employees.map(e => e.name.toLowerCase().trim().replace(/\s+/g, ' ')));
+
+      let namesToAdd = [];
+      if (activeAddTab === 'single') {
+        const val = document.getElementById('inputSingleName').value.trim();
+        if (val) namesToAdd.push(val);
+      } else {
+        namesToAdd = document.getElementById('inputBulkNames').value
+          .split('\n')
+          .map(n => n.trim())
+          .filter(n => n.length > 0);
+      }
+
+      if (namesToAdd.length === 0) {
+        showToast("Please enter at least one name.", "warning");
+        return;
+      }
+
+      const newRecords = [];
+      let duplicateCount = 0;
+
+      namesToAdd.forEach(name => {
+        const norm = name.toLowerCase().replace(/\s+/g, ' ');
+        if (existingNames.has(norm)) {
+          duplicateCount++;
+        } else {
+          existingNames.add(norm);
+          newRecords.push({
+            id: generateUniqueId(),
+            name: name,
+            team: team,
+            totalCredits: credits,
+            dates: [],
+            alertCount: 0
+          });
+        }
+      });
+
+      if (newRecords.length > 0) {
+        // Append new records without modifying existing employee objects
+        window.employees = [...window.employees, ...newRecords];
+        persistData();
+        closeManageMembersModal();
+        showToast(`Added ${newRecords.length} member(s)${duplicateCount > 0 ? ` (${duplicateCount} duplicates skipped)` : ''}. Existing records untouched.`, "success");
+      } else {
+        showToast("Duplicate name(s) detected! Existing records preserved.", "error");
+      }
+    }
+
+    function deleteSingleMember(empId) {
+      window.employees = window.employees.filter(e => e.id !== empId);
+      selectedIds.delete(empId);
+      persistData();
+      updateBulkActionBar();
+      showToast("Member deleted. Other records untouched.");
+    }
+
+    function toggleSelectOne(empId, isChecked) {
+      if (isChecked) selectedIds.add(empId);
+      else selectedIds.delete(empId);
+      updateBulkActionBar();
+    }
+
+    function toggleSelectAll(isChecked) {
+      const query = document.getElementById('searchInput').value.toLowerCase().trim();
+      const deptFilter = document.getElementById('departmentFilter').value;
+      window.employees.forEach(emp => {
+        if (deptFilter !== 'ALL' && emp.team !== deptFilter) return;
+        if (query && !emp.name.toLowerCase().includes(query)) return;
+        if (isChecked) selectedIds.add(emp.id);
+        else selectedIds.delete(emp.id);
+      });
+      updateBulkActionBar();
+      renderApp();
+    }
+
+    function clearSelection() {
+      selectedIds.clear();
+      updateBulkActionBar();
+      renderApp();
+    }
+
+    function updateBulkActionBar() {
+      const bar = document.getElementById('bulkActionBar');
+      const countLabel = document.getElementById('bulkSelectedCount');
+      if (isEditMode && selectedIds.size > 0) {
+        bar.classList.remove('hidden');
+        countLabel.textContent = `${selectedIds.size} member(s) selected`;
+      } else {
+        bar.classList.add('hidden');
+      }
+    }
+
+    function handleBatchDelete() {
+      if (selectedIds.size === 0) return;
+      window.employees = window.employees.filter(e => !selectedIds.has(e.id));
+      const deletedCount = selectedIds.size;
+      selectedIds.clear();
+      persistData();
+      updateBulkActionBar();
+      showToast(`Deleted ${deletedCount} member(s). Remaining roster untouched.`, "success");
+    }
+
+    // --- Isolated Case-Insensitive File Upload ---
+    function openUploadModal() {
+      document.getElementById('fileUploadInput').value = '';
+      document.getElementById('modalUpload').classList.remove('hidden');
+    }
+    function closeUploadModal() { document.getElementById('modalUpload').classList.add('hidden'); }
+
+    function processUploadedFile() {
+      const fileInput = document.getElementById('fileUploadInput');
+      const file = fileInput.files[0];
+      if (!file) { showToast("Select an Excel or CSV file first.", "warning"); return; }
+
+      const mode = document.querySelector('input[name="uploadMode"]:checked').value;
+      const reader = new FileReader();
+
+      reader.onload = function(e) {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+          const jsonRows = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+
+          let headerIdx = -1, nameCol = -1, teamCol = -1, remCol = -1;
+          for (let r = 0; r < Math.min(15, jsonRows.length); r++) {
+            const row = jsonRows[r];
+            if (!Array.isArray(row)) continue;
+            for (let c = 0; c < row.length; c++) {
+              const val = String(row[c] || '').toLowerCase().trim().replace(/[\s\-_]/g, '');
+              if ((val.includes('name') || val.includes('employee')) && nameCol === -1) nameCol = c;
+              if ((val.includes('team') || val.includes('department') || val.includes('group')) && teamCol === -1) teamCol = c;
+              if ((val.includes('remain') || val.includes('credit')) && remCol === -1) remCol = c;
+            }
+            if (nameCol !== -1) { headerIdx = r; break; }
+          }
+
+          if (nameCol === -1) { showToast("Could not find Name column.", "error"); return; }
+
+          if (mode === 'remove') {
+            const namesToRemove = new Set();
+            for (let r = headerIdx + 1; r < jsonRows.length; r++) {
+              const row = jsonRows[r];
+              if (!row || !row[nameCol]) continue;
+              namesToRemove.add(String(row[nameCol]).toLowerCase().trim().replace(/\s+/g, ' '));
+            }
+            const beforeCount = window.employees.length;
+            window.employees = window.employees.filter(emp => !namesToRemove.has(emp.name.toLowerCase().trim().replace(/\s+/g, ' ')));
+            const removedCount = beforeCount - window.employees.length;
+            persistData();
+            closeUploadModal();
+            showToast(`Removed ${removedCount} member(s). Remaining roster untouched.`, "success");
+          } else {
+            const existingNames = new Set(window.employees.map(emp => emp.name.toLowerCase().trim().replace(/\s+/g, ' ')));
+            const newRecords = [];
+            let skipped = 0;
+
+            for (let r = headerIdx + 1; r < jsonRows.length; r++) {
+              const row = jsonRows[r];
+              if (!row || !row[nameCol] || String(row[nameCol]).trim() === '') continue;
+
+              const rawName = String(row[nameCol]).trim();
+              const normName = rawName.toLowerCase().replace(/\s+/g, ' ');
+              if (existingNames.has(normName)) {
+                skipped++;
+                continue; // Never overwrite or alter existing employees
+              }
+
+              const rawTeam = teamCol !== -1 && row[teamCol] ? String(row[teamCol]) : workbook.SheetNames[0];
+              const normalizedTeam = normalizeTeamGroup(rawTeam);
+              const credits = remCol !== -1 && !isNaN(parseInt(row[remCol])) ? parseInt(row[remCol]) : 5;
+
+              existingNames.add(normName);
+              newRecords.push({
+                id: generateUniqueId(),
+                name: rawName,
+                team: normalizedTeam,
+                totalCredits: credits,
+                dates: [],
+                alertCount: 0
+              });
+            }
+
+            window.employees = [...window.employees, ...newRecords];
+            persistData();
+            closeUploadModal();
+            showToast(`Imported ${newRecords.length} new member(s)${skipped > 0 ? ` (${skipped} existing preserved)` : ''}.`, "success");
+          }
+        } catch (err) {
+          showToast("Failed to parse file", "error");
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    function exportToCSV() {
+      if (window.employees.length === 0) {
+        showToast("No data to export.", "warning");
+        return;
+      }
+      const headers = ["Name", "Team / Group", "Total Credits", "Used Credits", "Remaining", "D1", "D2", "D3", "D4", "D5", "DVO Alert Strikes"];
+      const rows = [];
+
+      window.employees.forEach(emp => {
+        const stats = computeCredits(emp);
+        const dates = emp.dates || [];
+        rows.push([
+          `"${emp.name.replace(/"/g, '""')}"`,
+          `"${emp.team.replace(/"/g, '""')}"`,
+          stats.total,
+          stats.used,
+          stats.remaining,
+          `"${dates[0] ? dates[0].date : ''}"`,
+          `"${dates[1] ? dates[1].date : ''}"`,
+          `"${dates[2] ? dates[2].date : ''}"`,
+          `"${dates[3] ? dates[3].date : ''}"`,
+          `"${dates[4] ? dates[4].date : ''}"`,
+          stats.isDvo ? stats.strikes : 0
+        ]);
+      });
+
+      const csvContent = "\uFEFF" + [headers.join(","), ...rows.map(r => r.join(","))].join("\r\n");
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", `HTO_Roster_Export_${new Date().toISOString().slice(0, 10)}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      showToast("Export completed", "success");
+    }
+
+    function openGuideModal() { document.getElementById('modalGuide').classList.remove('hidden'); }
+    function closeGuideModal() { document.getElementById('modalGuide').classList.add('hidden'); }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('view') === 'readonly') {
+        const btn = document.getElementById('btnEditAccess');
+        if (btn) btn.style.display = 'none';
+      }
+      initDataStore();
+    });
+  </script>
+</body>
+</html>
