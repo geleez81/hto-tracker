@@ -40,7 +40,7 @@
           <div class="flex items-center gap-2">
             <h1 class="text-base font-bold tracking-tight text-white">2026 HTO Tracker</h1>
             <span id="syncBadge" class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Connecting...
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Connecting Firebase...
             </span>
           </div>
           <p class="text-[11px] text-slate-400">Automated Holiday Time Off & Audit Balance System</p>
@@ -99,7 +99,7 @@
 
       <div class="bg-slate-900 border border-slate-800 rounded-xl p-3 flex items-center justify-between">
         <div>
-          <span class="text-xs text-slate-400 font-medium uppercase tracking-wider">DVO Alert Deductions</span>
+          <span class="text-xs text-slate-400 font-medium uppercase tracking-wider">Total Alert: No Answer</span>
           <p id="metricAlertStrikes" class="text-2xl font-bold text-rose-400 mt-0.5">0</p>
         </div>
         <div class="bg-rose-500/10 text-rose-400 p-2.5 rounded-lg border border-rose-500/20">
@@ -323,7 +323,7 @@
         <button onclick="closeGuideModal()" class="text-slate-400 hover:text-white">✕</button>
       </div>
       <div class="py-3 text-xs space-y-2 text-slate-300">
-        <p><strong class="text-white">Balance Formula:</strong> Remaining = Total Credits - (Scheduled Dates + DVO Alert Strikes)</p>
+        <p><strong class="text-white">Balance Formula:</strong> Remaining = Total Credits - (Scheduled Dates + Alert: No Answer Strikes)</p>
         <p><strong class="text-white">Strict Record Isolation:</strong> Importing a roster, adding/deleting members, scheduling dates, or adjusting alert strikes affects <strong>only the targeted individual</strong>—existing staff records and balances are never overwritten or recalculated.</p>
         <p><strong class="text-white">Auditing:</strong> Dates record the GMSCC Name on hover.</p>
       </div>
@@ -337,40 +337,35 @@
 
   <!-- ================= FIREBASE & APP JAVASCRIPT ================= -->
   <script>
-    // ============================================================
-    // 1. FIREBASE CONFIGURATION (Replace placeholders if using live sync)
-    // ============================================================
     const firebaseConfig = {
-      apiKey: "YOUR_API_KEY",
-      authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-      projectId: "YOUR_PROJECT_ID",
-      storageBucket: "YOUR_PROJECT_ID.appspot.com",
-      messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-      appId: "YOUR_APP_ID"
+      apiKey: "AIzaSyCJw2_caUAG4Z4A5sJ_pZkdjXqdKcAHPPg",
+      authDomain: "hto-tracker.firebaseapp.com",
+      projectId: "hto-tracker",
+      storageBucket: "hto-tracker.firebasestorage.app",
+      messagingSenderId: "508764111483",
+      appId: "1:508764111483:web:d7d14912f8211c16b898de"
     };
 
     let db = null;
     let isFirebaseReady = false;
     try {
-      if (firebaseConfig.apiKey && firebaseConfig.apiKey !== "YOUR_API_KEY") {
-        firebase.initializeApp(firebaseConfig);
-        db = firebase.firestore();
-        isFirebaseReady = true;
-      }
+      firebase.initializeApp(firebaseConfig);
+      db = firebase.firestore();
+      isFirebaseReady = true;
     } catch (err) {
       console.warn("Firebase init notice:", err);
     }
 
     const AUTH_PASSWORD = "GMSCC";
-    const STORAGE_KEY = "hto_roster_isolated_v3";
+    const STORAGE_KEY = "hto_roster_isolated_v4";
     let isEditMode = false;
     let currentTargetEmpId = null;
     let activeAddTab = 'single';
     let selectedIds = new Set();
 
+    // Immutable internal store
     window.employees = [];
 
-    // Generate guaranteed collision-free ID per employee
     function generateUniqueId() {
       if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
         return 'emp_' + crypto.randomUUID();
@@ -378,7 +373,7 @@
       return 'emp_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 10);
     }
 
-    // Ensure every loaded employee object has a unique ID and isolated arrays
+    // Deep-clone and sanitize each employee record independently so no two rows share references
     function sanitizeEmployeeRecords(list) {
       if (!Array.isArray(list)) return [];
       const seenIds = new Set();
@@ -409,14 +404,14 @@
         badge.className = 'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-blue-500/20 text-blue-300 border border-blue-500/30';
         badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-blue-400 animate-ping"></span> ${text}`;
       } else {
-        badge.className = 'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-slate-800 text-slate-300 border border-slate-700';
+        badge.className = 'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30';
         badge.innerHTML = text;
       }
     }
 
-    function initDataStore() {
+    function initFirebaseSync() {
       if (!isFirebaseReady || !db) {
-        updateSyncBadge('local', 'Standalone Storage Active');
+        updateSyncBadge('warn', 'Local Only (Firebase Unavailable)');
         loadLocalFallback();
         return;
       }
@@ -443,26 +438,30 @@
           }
         }, (err) => {
           console.error("Firestore sync error:", err);
-          updateSyncBadge('local', 'Local Storage Fallback');
+          updateSyncBadge('warn', 'Sync Error (Check Firestore Rules)');
+          showToast("Firebase sync error — check Firestore rules.", "error");
           loadLocalFallback();
         });
     }
 
     function persistData() {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(window.employees));
+      const cleanSnapshot = sanitizeEmployeeRecords(window.employees);
+      window.employees = cleanSnapshot;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(cleanSnapshot));
       renderApp();
 
       if (isFirebaseReady && db) {
         updateSyncBadge('syncing', 'Syncing...');
         db.collection("hto_tracker").doc("shared_roster")
           .set({
-            rosterPayload: JSON.stringify(window.employees),
+            rosterPayload: JSON.stringify(cleanSnapshot),
             updatedAt: new Date().toISOString()
           }, { merge: true })
           .then(() => updateSyncBadge('live', 'Firebase Live Active'))
           .catch(err => {
             console.error("Firestore write error:", err);
-            updateSyncBadge('local', 'Saved Locally');
+            updateSyncBadge('warn', 'Write Failed');
+            showToast("Failed to save to Firebase.", "error");
           });
       }
     }
@@ -524,7 +523,6 @@
       return { total, used, remaining, strikes, datesCount, isDvo };
     }
 
-    // --- Edit Access Handlers ---
     function handleEditAccessClick() {
       if (isEditMode) {
         isEditMode = false;
@@ -585,7 +583,7 @@
       renderApp();
     }
 
-    // --- Isolated Date Scheduling ---
+    // --- Isolated Date Scheduling (Targets ONLY currentTargetEmpId) ---
     function handleAddDateClick(empId) {
       currentTargetEmpId = empId;
       if (!isEditMode) {
@@ -621,13 +619,13 @@
       const dateVal = document.getElementById('inputModalDate').value;
       const gmsccVal = document.getElementById('inputModalGmscc').value.trim();
 
-      if (!dateVal) { showToast("Please enter or select a complete date.", "warning"); return; }
+      if (!dateVal) { showToast("Please pick a date.", "warning"); return; }
       if (!gmsccVal) { showToast("Please enter your GMSCC name.", "warning"); return; }
 
       localStorage.setItem('last_gmscc_name', gmsccVal);
       const targetId = currentTargetEmpId;
 
-      // Immutable update targeting ONLY targetId
+      // Immutable row-isolated update: only targetId is modified
       window.employees = window.employees.map(emp => {
         if (emp.id !== targetId) return emp;
         const existingDates = Array.isArray(emp.dates) ? [...emp.dates] : [];
@@ -645,7 +643,7 @@
     function removeDate(empId, dateIdx) {
       if (!isEditMode) { handleEditAccessClick(); return; }
 
-      // Immutable update targeting ONLY empId
+      // Immutable row-isolated update: only empId is modified
       window.employees = window.employees.map(emp => {
         if (emp.id !== empId) return emp;
         const updatedDates = (emp.dates || []).filter((_, idx) => idx !== dateIdx);
@@ -656,11 +654,11 @@
       showToast("Scheduled date removed");
     }
 
-    // --- Isolated Alert: No Answer Stepper ---
+    // --- Isolated Alert: No Answer Stepper (Targets ONLY empId) ---
     function updateStrike(empId, delta) {
       if (!isEditMode) { handleEditAccessClick(); return; }
 
-      // Immutable update targeting ONLY empId (and only if DVO)
+      // Immutable row-isolated update: only empId is modified
       window.employees = window.employees.map(emp => {
         if (emp.id !== empId || !isDvoGroup(emp.team)) return emp;
         const nextCount = Math.max(0, (emp.alertCount || 0) + delta);
@@ -670,7 +668,6 @@
       persistData();
     }
 
-    // --- Table Rendering ---
     function renderApp() {
       const query = document.getElementById('searchInput').value.toLowerCase().trim().replace(/\s+/g, ' ');
       const deptFilter = document.getElementById('departmentFilter').value;
@@ -778,7 +775,7 @@
       });
     }
 
-    // --- Isolated Member Management (Append-Only / Target-Only Delete) ---
+    // --- Isolated Member Additions & Deletions ---
     function openManageMembersModal() {
       document.getElementById('inputSingleName').value = '';
       document.getElementById('inputBulkNames').value = '';
@@ -849,7 +846,7 @@
       });
 
       if (newRecords.length > 0) {
-        // Append new records without modifying existing employee objects
+        // Append-only: existing records remain untouched
         window.employees = [...window.employees, ...newRecords];
         persistData();
         closeManageMembersModal();
@@ -864,7 +861,7 @@
       selectedIds.delete(empId);
       persistData();
       updateBulkActionBar();
-      showToast("Member deleted. Other records untouched.");
+      showToast("Member removed. Other records untouched.");
     }
 
     function toggleSelectOne(empId, isChecked) {
@@ -913,7 +910,7 @@
       showToast(`Deleted ${deletedCount} member(s). Remaining roster untouched.`, "success");
     }
 
-    // --- Isolated Case-Insensitive File Upload ---
+    // --- Isolated Case-Insensitive Roster Upload ---
     function openUploadModal() {
       document.getElementById('fileUploadInput').value = '';
       document.getElementById('modalUpload').classList.remove('hidden');
@@ -976,7 +973,7 @@
               const normName = rawName.toLowerCase().replace(/\s+/g, ' ');
               if (existingNames.has(normName)) {
                 skipped++;
-                continue; // Never overwrite or alter existing employees
+                continue; // Strictly preserve existing members' dates, strikes, and balances
               }
 
               const rawTeam = teamCol !== -1 && row[teamCol] ? String(row[teamCol]) : workbook.SheetNames[0];
@@ -1011,7 +1008,7 @@
         showToast("No data to export.", "warning");
         return;
       }
-      const headers = ["Name", "Team / Group", "Total Credits", "Used Credits", "Remaining", "D1", "D2", "D3", "D4", "D5", "DVO Alert Strikes"];
+      const headers = ["Name", "Team / Group", "Total Credits", "Used Credits", "Remaining", "D1", "D2", "D3", "D4", "D5", "Alert: No Answer Strikes"];
       const rows = [];
 
       window.employees.forEach(emp => {
@@ -1053,7 +1050,7 @@
         const btn = document.getElementById('btnEditAccess');
         if (btn) btn.style.display = 'none';
       }
-      initDataStore();
+      initFirebaseSync();
     });
   </script>
 </body>
